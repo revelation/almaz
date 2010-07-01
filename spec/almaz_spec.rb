@@ -1,6 +1,4 @@
 require File.expand_path(File.join(File.dirname(__FILE__), 'spec_helper'))
-
-require 'redis/raketasks'
 require 'rack/test'
 
 describe Almaz do
@@ -30,36 +28,34 @@ describe Almaz do
 
       it "should capture the request path under the session_variable" do
         get '/awesome/controller'
-        @db.list_range('almaz::user::1',0,-1).first.should include('/awesome/controller')
+        @db.lrange('almaz::user::1',0,-1).first.should include('/awesome/controller')
       end
     
       it "should capture the request query params under the session_variable" do
         get '/awesome/controller?whos=yourdaddy&what=doeshedo'
-        @db.list_range('almaz::user::1',0,-1).first.should include('whos=yourdaddy&what=doeshedo')
+        @db.lrange('almaz::user::1',0,-1).first.should include('whos=yourdaddy&what=doeshedo')
       end
 
       it "should capture the request method params under the session_variable" do
         get '/awesome/controller'
-        @db.list_range('almaz::user::1',0,-1).first.should include('GET')
+        @db.lrange('almaz::user::1',0,-1).first.should include('GET')
       end
 
       it "should capture the post params under the session_variable" do
         post '/awesome/controller', :didyouknow => 'thatyouremyhero'
-        @db.list_range('almaz::user::1',0,-1).first.should include("{\"didyouknow\"=>\"thatyouremyhero\"}")
+        @db.lrange('almaz::user::1',0,-1).first.should include("{\"didyouknow\"=>\"thatyouremyhero\"}")
       end
       
       it "should record a timestamp on each request" do
         Timecop.freeze(Date.today + 30) do        
           post '/awesome/controller', :didyouknow => 'thatyouremyhero'
-          @db.list_range('almaz::user::1',0,-1).first.should include(Time.now.to_s)
+          @db.lrange('almaz::user::1',0,-1).first.should include(Time.now.to_s)
         end
       end
       
       it "should not fail if there is no redis server" do
         @db.quit
-        RedisRunner.stop
         get '/awesome/controller'
-        result = RedisRunner.start_detached
         sleep 1
         @db = Redis.new(Almaz.redis_config)
         
@@ -70,7 +66,7 @@ describe Almaz do
         Almaz.expiry = 1
         get '/awesome/controller' 
         sleep 2
-        @db.list_range('almaz::user::1',0,-1).should == []
+        @db.lrange('almaz::user::1',0,-1).should == []
       end
 
     end
@@ -88,7 +84,7 @@ describe Almaz do
     before(:each) do
       @requests = ['GET /awesome/controller limit=2', 'POST /awesome/controller didyouknow=thatyouremyhero', 'GET /awesome/controller']
       @requests.each do |r|
-        @db.push_tail('almaz::user::1',r)
+        @db.rpush('almaz::user::1',r)
       end
       Almaz::View.user('andrew','iscool')
     end
@@ -126,7 +122,7 @@ describe Almaz do
       end
       
       it 'should return the list valid keys' do
-        @db.push_tail('almaz::user::awesome','GET /butter')
+        @db.rpush('almaz::user::awesome','GET /butter')
         get '/almaz', {}, {'HTTP_AUTHORIZATION' => encode_credentials('andrew', 'iscool')}
         last_response.body.should include('almaz::user::1'.to_json)
         last_response.body.should include('almaz::user::'.to_json)

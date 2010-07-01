@@ -27,7 +27,7 @@ class Almaz
     def call(env)
       begin
         key = "almaz::#{Almaz.session_variable}::#{env['rack.session'][Almaz.session_variable]}"
-        @r.push_tail(key, "#{Time.now.to_s} #{env['REQUEST_METHOD']} #{env['PATH_INFO']} #{env['QUERY_STRING']}#{env['rack.request.form_hash'].inspect}")
+        @r.rpush(key, "#{Time.now.to_s} #{env['REQUEST_METHOD']} #{env['PATH_INFO']} #{env['QUERY_STRING']}#{env['rack.request.form_hash'].inspect}")
         @r.expire(key, Almaz.expiry)
       rescue => e
         puts "ALMAZ ERROR: #{e}"
@@ -70,7 +70,7 @@ class Almaz
       content_type :json
       @r = Redis.new(Almaz.redis_config)
       id = '' if id == 'noid'
-      @r.list_range("almaz::#{Almaz.session_variable}::#{id}", 0, -1).to_json
+      @r.lrange("almaz::#{Almaz.session_variable}::#{id}", 0, -1).to_json
     end
       
   end

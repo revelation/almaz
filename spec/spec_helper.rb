@@ -5,16 +5,10 @@ require File.join(File.dirname(__FILE__), '..', 'lib', 'almaz')
 require 'base64'
 require 'timecop'
 require 'logger'
+require 'date'
 
 Spec::Runner.configure do |config|
   config.before(:all) {
-    result = RedisRunner.start_detached
-    raise("Could not start redis-server, aborting") unless result
-
-    # yeah, this sucks, but it seems like sometimes we try to connect too quickly w/o it
-    sleep 1
-
-    # use database 15 for testing so we dont accidentally step on real data
     @db = Redis.new(:db => 15) #, :logger => Logger.new(STDOUT), :debug => true)
   }
   
@@ -23,11 +17,7 @@ Spec::Runner.configure do |config|
   }
   
   config.after(:all) {
-    begin
-      @db.quit
-    ensure
-      RedisRunner.stop rescue 'Oops'
-    end
+    @db.quit
   }
 end
 
