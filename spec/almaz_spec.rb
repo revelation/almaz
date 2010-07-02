@@ -3,10 +3,7 @@ require 'rack/test'
 
 describe Almaz do
   before(:each) do
-    Almaz.session_variable = :user
-    Almaz.expiry = 1000
-    Almaz.redis_config = {:db => 15}
-    # Almaz.redis_config = {:db => 15, :logger => Logger.new(STDOUT), :debug => true}
+    Almaz.config[:redis] = {:db => 15}
   end
 
   describe Almaz::Capture do
@@ -33,7 +30,8 @@ describe Almaz do
     
       it "should capture the request query params under the session_variable" do
         get '/awesome/controller?whos=yourdaddy&what=doeshedo'
-        @db.lrange('almaz::user::1',0,-1).first.should include('whos=yourdaddy&what=doeshedo')
+        logged_request = @db.lrange('almaz::user::1',0,-1).first
+        JSON.parse(logged_request)['params'].should == {"whos"=>"yourdaddy", "what"=>"doeshedo"}
       end
 
       it "should capture the request method params under the session_variable" do
@@ -43,7 +41,8 @@ describe Almaz do
 
       it "should capture the post params under the session_variable" do
         post '/awesome/controller', :didyouknow => 'thatyouremyhero'
-        @db.lrange('almaz::user::1',0,-1).first.should include("{\"didyouknow\"=>\"thatyouremyhero\"}")
+        logged_request = @db.lrange('almaz::user::1',0,-1).first
+        JSON.parse(logged_request)['params'].should == {"didyouknow"=>"thatyouremyhero"}
       end
       
       it "should record a timestamp on each request" do
@@ -57,79 +56,18 @@ describe Almaz do
         @db.quit
         get '/awesome/controller'
         sleep 1
-        @db = Redis.new(Almaz.redis_config)
-        
+        @db = Redis.new(Almaz.config[:redis])
         last_response.should be_successful
       end
       
-      it "should expire the keys with expiry setting" do
-        Almaz.expiry = 1
-        get '/awesome/controller' 
-        sleep 2
-        @db.lrange('almaz::user::1',0,-1).should == []
+      it "should only store the most recent requests up to the maximum configured length" do
+        max_size = Almaz.config[:max_list_size] = 10
+        post '/awesome/controller', :didyouknow => 'thisshouldbedeleted'
+        max_size.times {|taco| post '/awesome/controller', :didyouknow => 'thatyouremyhero'}
+        @db.llen('almaz::user::1').should == max_size
+        logged_request = @db.lrange('almaz::user::1', -1, -1).first
+        JSON.parse(logged_request)['params'].should_not == {"didyouknow"=>"thisshouldbedeleted"}
       end
-
     end
-  
   end
-
-  describe Almaz::View do
-    include Rack::Test::Methods
-  
-    def app
-      use Almaz::View
-      Sinatra::Application
-    end
-  
-    before(:each) do
-      @requests = ['GET /awesome/controller limit=2', 'POST /awesome/controller didyouknow=thatyouremyhero', 'GET /awesome/controller']
-      @requests.each do |r|
-        @db.rpush('almaz::user::1',r)
-      end
-      Almaz::View.user('andrew','iscool')
-    end
-  
-    it "should respond to /almaz/:id" do
-      get '/almaz/1', {}, {'HTTP_AUTHORIZATION' => encode_credentials('andrew', 'iscool')}
-      last_response.should be_successful
-    end
-    
-    it "should respond to /almaz" do
-      get '/almaz', {}, {'HTTP_AUTHORIZATION' => encode_credentials('andrew', 'iscool')}
-      last_response.should be_successful
-    end
-  
-    it 'should deny bad people away from show action' do
-      get '/almaz/1', {}, {'HTTP_AUTHORIZATION' => encode_credentials('james', 'goaway')}
-      last_response.should_not be_successful
-    end
-    
-    it 'should deny bad people away from index action' do
-      get '/almaz', {}, {'HTTP_AUTHORIZATION' => encode_credentials('james', 'goaway')}
-      last_response.should_not be_successful
-    end
-  
-    describe 'with correct authentication' do
-      it "should return the list of request for the given user in json" do
-        get '/almaz/1', {}, {'HTTP_AUTHORIZATION' => encode_credentials('andrew', 'iscool')}
-        last_response.body.should == @requests.to_json
-        last_response.content_type.should == 'application/json'
-      end
-      
-      it 'should return the list of request for those without a value for the session_varible if noid is given' do
-        get '/almaz/noid', {}, {'HTTP_AUTHORIZATION' => encode_credentials('andrew', 'iscool')}
-        last_response.body.should include('GET /almaz/noid')
-      end
-      
-      it 'should return the list valid keys' do
-        @db.rpush('almaz::user::awesome','GET /butter')
-        get '/almaz', {}, {'HTTP_AUTHORIZATION' => encode_credentials('andrew', 'iscool')}
-        last_response.body.should include('almaz::user::1'.to_json)
-        last_response.body.should include('almaz::user::'.to_json)
-        last_response.body.should include('almaz::user::awesome'.to_json)
-      end
-    end
-  
-  end
-
 end
