@@ -24,11 +24,17 @@ class Almaz
       @r = Redis.new(Almaz.redis_config)
     end
     
-    def call(env)
+    def call(env)      
       begin
+        request_methods = Rack::Request.public_instance_methods(false).reject { |method_name| method_name =~ /[=\[]|content_length/ }.freeze
+        request = Rack::Request.new(env)
         key = "almaz::#{Almaz.session_variable}::#{env['rack.session'][Almaz.session_variable]}"
-        @r.rpush(key, "#{Time.now.to_s} #{env['REQUEST_METHOD']} #{env['PATH_INFO']} #{env['QUERY_STRING']}#{env['rack.request.form_hash'].inspect}")
-        @r.expire(key, Almaz.expiry)
+        goodkeys = [ :request_method, :path_info, :referrer, :params, :ip]
+        loggyfriend = {}
+        request_methods.each do |method_name|
+          loggyfriend[method_name] = request.send(method_name.to_sym) if goodkeys.include?(method_name.to_sym)
+        end
+        @r.rpush(key, loggyfriend.merge(:time => Time.now.to_s).to_json)
       rescue => e
         puts "ALMAZ ERROR: #{e}"
       end
@@ -70,7 +76,7 @@ class Almaz
       content_type :json
       @r = Redis.new(Almaz.redis_config)
       id = '' if id == 'noid'
-      @r.lrange("almaz::#{Almaz.session_variable}::#{id}", 0, -1).to_json
+      @r.lrange("almaz::#{Almaz.session_variable}::#{id}", 0, -1).map {|l| JSON.parse(l)}.to_json
     end
       
   end
