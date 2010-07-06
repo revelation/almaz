@@ -6,6 +6,7 @@ require 'base64'
 require 'timecop'
 require 'logger'
 require 'date'
+require 'sinatra'
 
 Spec::Runner.configure do |config|
   config.before(:all) {

@@ -1,4 +1,5 @@
+.DS_Store
 dump.rdb
 pkg
 almaz-*.gem
-almaz.gemspec
+almaz-revelation.gemspec

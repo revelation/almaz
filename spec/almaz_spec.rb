@@ -12,7 +12,6 @@ describe Almaz do
     def app
       use Rack::Session::Cookie, :key => '_max_project_session'
       use Almaz::Capture
-      use ExampleSinatraApp
       Sinatra::Application
     end
   
@@ -50,14 +49,6 @@ describe Almaz do
           post '/awesome/controller', :didyouknow => 'thatyouremyhero'
           @db.lrange('almaz::user::1',0,-1).first.should include(Time.now.to_s)
         end
-      end
-      
-      it "should not fail if there is no redis server" do
-        @db.quit
-        get '/awesome/controller'
-        sleep 1
-        @db = Redis.new(Almaz.config[:redis])
-        last_response.should be_successful
       end
       
       it "should only store the most recent requests up to the maximum configured length" do
