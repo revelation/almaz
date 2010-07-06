@@ -36,7 +36,7 @@ class Almaz
       Rack::Request.public_instance_methods(false).each do |request_method|
         captured[request_method] = request.send(request_method.to_sym) if Almaz.config[:capture_keys].include?(request_method.to_sym)
       end
-      captured.merge!(:time => Time.now.to_s)
+      captured.merge!(:time => Time.now.to_s, :user_agent => request.env["HTTP_USER_AGENT"])
       captured
     end
   end
